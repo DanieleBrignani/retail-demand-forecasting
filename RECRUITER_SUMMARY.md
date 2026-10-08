@@ -18,4 +18,4 @@
 
 **9. Trade-off.** Weekly granularity makes the problem learnable but is coarser than daily; simplicity (a moving average) beat complexity under the declared rules; weekly and daily numbers are not comparable.
 
-**10. Current limitations.** Revised historical evaluation on already-inspected data — no independent holdout; one dataset covering about two years (two full Decembers and the 2011 run-up); cold-start products not evaluated; prediction intervals experimental and not served; CI workflow never executed (no remote); no production traffic or load testing. **Not claimed: production readiness or model superiority.**
+**10. Current limitations.** Revised historical evaluation on already-inspected data — no independent holdout; one dataset covering about two years (two full Decembers and the 2011 run-up); cold-start products not evaluated; prediction intervals experimental and not served; CI (GitHub Actions) green on fixtures only, not on the real-data pipeline; no production traffic or load testing. **Not claimed: production readiness or model superiority.**

@@ -5,7 +5,7 @@
 
 **Unresolved critical items (prominent):**
 * No independent holdout exists: every block of the dataset has been inspected, so all results are *revised historical evaluations*.
-* The CI workflow has never run (no remote repository).
+* CI: run #1 on GitHub failed (pytest installed with `--no-deps`), run #2 on `f03c53b` passed all four jobs; the repository is private, so no public badge. The CI uses a throwaway API key and fixtures only.
 * The daily LightGBM line is invalid as evidence (price look-ahead `fv1`); its approval is revoked. A corrected daily comparison is reported (`docs/results_daily_fv2.md`) but the daily line is not served.
 * Genuinely unseen (cold-start) products are not evaluated, only quantified.
 
@@ -29,7 +29,7 @@ Legend: PASS = demonstrated by an executed check whose outcome is recorded; PART
 | 13 | API: success and error paths, auth | PASS | `api/app.py`, `tests/test_api.py`, `tests/test_weekly_lifecycle.py` | 401/200/422/404/503 paths exercised in tests and by curl on the rebuilt stack | No load test, no TLS, no rate limiting | Behind a gateway; load test |
 | 14 | Docker Compose rebuilt and healthy | PASS | `docker-compose.yml` | `docker compose build` + `up -d --wait`: all services healthy; targets up; 13 alert rules healthy | Dashboards not inspected visually | Screenshot-based check |
 | 15 | dbt checks (integrity, negative controls) | PASS | `dbt/`, `tests/test_dbt_warehouse.py` | 3 integration tests incl. negative controls pass; `dbt build` on the real data: PASS=35 in 119 s | Full-panel join-count test replaced by an exhaustive key-uniqueness proof (not a sample) | — |
-| 16 | CI workflow | **FAIL (not executed)** | `.github/workflows/ci.yml` | YAML parses; every step's command was run locally | No remote → never executed; no badge claimed | Push to an authorised remote and read the run |
+| 16 | CI workflow | PASS | `.github/workflows/ci.yml` | pushed 2026-10-08: run #1 failed (pytest `--no-deps` install), run #2 (`f03c53b`) green on `lint`, `unit`, `integration` (PostgreSQL + dbt), `docker`; evidence is the Actions page (screenshot reviewed by the author) | Private repository (no public badge); runs fixtures only, not the real-data pipeline; Node 20 deprecation warnings | Pin newer action versions; Push to an authorised remote and read the run |
 | 17 | Documentation consistent with the verified state | PASS | README, this file, `docs/` | contradictions listed in the task were resolved (see "Historical vs current" below) | Hand-edited docs can drift | Generate more docs from artifacts |
 
 ## 2. Scientific-evidence quality

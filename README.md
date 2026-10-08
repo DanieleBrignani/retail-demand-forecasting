@@ -28,7 +28,7 @@ UCI *Online Retail II* (CC BY 4.0): 1,067,371 invoice lines of one UK online ret
 | Unit conservation | total units source = panel = `raw.sales_long` = replayed actuals (checked: 11,402,383 and 894,740 for days 708–739); regression tests fail on the old int16 code |
 | Tests | full suite with PostgreSQL + dbt (run `pytest -q` with `RETAILFC_TEST_DSN` and `DBT_BIN`); lint `ruff check src tests scripts monitoring` |
 | Docker Compose | image rebuilt, stack recreated on a fresh volume, all services healthy, Prometheus targets up, Grafana provisioned, API probed (401/200/422/404/503) |
-| CI | `.github/workflows/ci.yml` exists but has **never run** (no remote) |
+| CI | GitHub Actions: run #1 failed (pytest installed with `--no-deps`), fixed; run #2 (`f03c53b`) passed all four jobs — `lint`, `unit`, `integration` (PostgreSQL + dbt), `docker`. Fixtures only; the real-data pipeline is not run in CI |
 
 ## 4. Main results (all numbers generated from artifacts)
 **Weekly, 10 rolling origins, eligible universe** ([`docs/results_weekly_v2.md`](docs/results_weekly_v2.md)): all-zero reference WAPE 1.000; 4-week mean **0.8465**; 13-week mean 0.8606; naive 0.9806; TSB 0.9806 (one extreme order inflates its forecasts); Croston/SBA 1.3303; seasonal naive (52 weeks) 1.3425;
@@ -69,4 +69,4 @@ Five-minute demonstration: [`docs/demo_script.md`](docs/demo_script.md). Reprodu
 
 ## 8. Limitations
 No independent holdout; one dataset (one retailer, about two years: two full Decembers and the 2011 run-up); cold-start products not evaluated; gross sales (returns not netted); zeros are not proven zero demand; no decision-cost evaluation; intervals not served; replayed 2011 data (freshness alerts meaningless);
-CI never executed; no load testing or production traffic. More: [`docs/limitations.md`](docs/limitations.md), [`docs/model_card.md`](docs/model_card.md), [`docs/error_analysis.md`](docs/error_analysis.md), [`docs/operations.md`](docs/operations.md), [`docs/data_availability.md`](docs/data_availability.md).
+CI runs on fixtures only (not the real-data pipeline); no load testing or production traffic. More: [`docs/limitations.md`](docs/limitations.md), [`docs/model_card.md`](docs/model_card.md), [`docs/error_analysis.md`](docs/error_analysis.md), [`docs/operations.md`](docs/operations.md), [`docs/data_availability.md`](docs/data_availability.md).

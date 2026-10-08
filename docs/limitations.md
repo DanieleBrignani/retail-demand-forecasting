@@ -2,7 +2,7 @@
 
 ## Current state in one paragraph
 Revised historical evaluation on already-inspected data (no independent holdout); one retailer, about two years (two full Decembers and the run-up of a third); weekly line served with a **baseline** (4-week mean) because LightGBM failed the MASE and segment guards; intervals experimental and not served;
-cold-start products quantified but not evaluated; gross sales (returns not netted); zeros are zero *recorded* sales; CI never executed; no load, failure-injection or production-traffic evidence. The daily LightGBM line is invalid as evidence (price look-ahead `fv1`) and its approval is revoked.
+cold-start products quantified but not evaluated; gross sales (returns not netted); zeros are zero *recorded* sales; CI green on fixtures only (not the real-data pipeline); no load, failure-injection or production-traffic evidence. The daily LightGBM line is invalid as evidence (price look-ahead `fv1`) and its approval is revoked.
 Sections below mix current rules and historical daily observations; items marked *(historical)* are superseded by [`audit_price_leakage.md`](audit_price_leakage.md) and [`results_daily_fv2.md`](results_daily_fv2.md).
 
 ## Failure-mode matrix (each case has defined behaviour; nothing is silently turned into a normal-looking forecast)

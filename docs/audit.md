@@ -10,7 +10,7 @@ Executed checks (2026-10-05/06, after the remediation; details in `PRODUCTION_RE
 * Real dataset: weekly v2 backtest executed twice (identical pooled metrics); `dbt build` on the corrected real data PASS=35 in 61 s; weekly lifecycle replay (register → approve → forecast → replay → reconcile twice → monitor) with database WAPE equal to the backtest WAPE; corrected daily comparison (`docs/results_daily_fv2.md`).
 * Synthetic end-to-end demo (`scripts/demo_fixture.sh`): the daily chain ran to completion in a fresh location; its first weekly step failed on too-early origins in the smoke config (a real defect: now a guarded error with a test), the weekly steps were then re-run successfully (selected `mean13` on the fixture, registered, approved, forecast, monitored). The whole script was not re-executed in one go after that fix.
 * Docker Compose: rebuilt from the current code on a fresh volume and probed on 2026-10-05; the host Docker daemon was restarted afterwards and the stack was brought back up (see the final report for its state).
-* GitHub Actions: never run (no remote). No load benchmark of the weekly API was run.
+* GitHub Actions: run #1 failed (pytest installed with `--no-deps`), run #2 on `f03c53b` passed `lint`, `unit`, `integration`, `docker` (4 min 35 s; seen on the Actions page of the private repository). No load benchmark of the weekly API was run.
 
 Historical (superseded): the 133-test count, the daily real-data run and the "dbt 37/37" correction below refer to the earlier daily study.
 
