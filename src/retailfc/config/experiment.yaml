@@ -1,0 +1,114 @@
+# Machine-readable experiment configuration (see docs/experiment_plan.md).
+# Changing anything under `protocol`, `features`, `lightgbm`, `training`, `statistical`
+# changes the config hash; the final holdout can only be evaluated against a locked hash.
+schema_version: 1
+experiment_name: retail_baselines_vs_lgbm
+seed: 42
+horizon: 28
+
+protocol:
+  window_days: 28               # every forecast window is 28 days
+  n_validation_windows: 3       # non-overlapping, chronologically last windows before the holdout
+  final_holdout_days: 28        # last 28 observed days; never used for selection
+  min_history_days: 56          # earliest usable forecast origin / training origin
+
+selection:
+  min_relative_gain: 0.005      # a richer feature set is adopted only if mean validation WAPE improves >= 0.5% (relative)
+
+training:
+  train_origin_stride_days: 28 # spacing between training origins (non-overlapping target windows)
+  train_window_days: 364        # how far back from (backtest origin - 28) training origins reach
+  max_series: null              # null = all series; integer = seeded random subset (documented)
+  early_stopping_origin_gap: 28 # ES validation origin = origin-28; training origins <= origin-56
+  refit_on_all: true            # refit with best_iteration on origins <= origin-28
+
+features:
+  price_scenario: observed      # observed (primary, operational) | planned (separate labelled scenario)
+  id_features: [item_id, dept_id, cat_id, store_id, state_id]
+  feature_sets:                 # incremental ablation
+    A: [history, ids, horizon]
+    B: [history, ids, horizon, calendar]
+    C: [history, ids, horizon, calendar, events]
+    D: [history, ids, horizon, calendar, events, price]
+
+lightgbm:
+  params:
+    objective: tweedie
+    tweedie_variance_power: 1.1
+    learning_rate: 0.05
+    num_leaves: 63
+    min_data_in_leaf: 100
+    feature_fraction: 0.8
+    bagging_fraction: 0.8
+    bagging_freq: 1
+    lambda_l2: 1.0
+    verbose: -1
+    seed: 42
+    num_threads: 0
+  level_offset: false           # true: mu = (roll_mean_28 + eps) * exp(f(x)); quantile boosters learn y/level
+  level_offset_eps: 0.1
+  num_boost_round: 600
+  early_stopping_rounds: 50
+  tuning:
+    n_trials: 6                 # bounded random search, tuned on data before the first validation origin
+    space:
+      num_leaves: [31, 63, 127]
+      min_data_in_leaf: [50, 100, 300]
+      feature_fraction: [0.6, 0.8, 1.0]
+      learning_rate: [0.03, 0.05, 0.08]
+      lambda_l2: [0.0, 1.0, 10.0]
+
+statistical:
+  subset_size: 120              # restricted subset for SARIMA, chosen from training data only
+  fit_window_days: 364
+  seasonal_period: 7
+  candidate_orders:             # (p,d,q)(P,D,Q,s) -- order chosen by inner validation (last 28 days <= origin)
+    - {order: [1, 0, 1], seasonal_order: [0, 0, 0, 0]}
+    - {order: [1, 0, 1], seasonal_order: [1, 0, 0, 7]}
+    - {order: [0, 1, 1], seasonal_order: [0, 1, 1, 7]}
+  maxiter: 50
+
+baselines:
+  mean_window_days: 28
+  seasonal_mean_weeks: 4
+
+segments:
+  volume_window_days: 90
+  intermittency_window_days: 364
+  adi_cutoff: 1.32
+  cv2_cutoff: 0.49
+
+uncertainty:
+  quantiles: [0.1, 0.5, 0.9]
+  calibrate: cqr                # split conformalised quantile regression, calibration window strictly earlier
+
+interpretability:
+  sample_rows: 200000
+  permutation_repeats: 3
+
+promotion:                      # defaults justified in docs/experiment_plan.md
+  min_primary_improvement_pct: 1.0     # challenger WAPE must be >=1% (relative) better than incumbent
+  max_vs_snaive_ratio: 0.97            # challenger WAPE <= 0.97 x seasonal naive WAPE
+  max_segment_degradation_pct: 5.0     # no volume/intermittency/store segment >5% (relative) worse than incumbent
+  min_interval_coverage: 0.70          # nominal 80% interval, accept >=70% empirical
+  max_abs_bias_pct: 10.0               # |sum(f-a)/sum(a)| <= 10%, pooled over `evidence_windows` consecutive windows
+  evidence_windows: 1                  # number of consecutive 28-day windows pooled into the promotion evidence
+  max_train_seconds: 14400
+  max_batch_forecast_seconds: 1800
+
+retraining:
+  min_new_actual_days: 14
+  cooldown_days: 14
+  min_matured_forecast_obs: 5000
+  wape_degradation_pct: 10.0           # relative to the reference WAPE on matured forecasts
+  drift_psi_threshold: 0.25
+  drift_persistence_checks: 3
+  max_model_age_days: 180              # governance: triggers reassessment, never auto-promotion
+  max_missing_actuals_fraction: 0.05   # data-quality gate
+  max_feature_missing_fraction: 0.20
+
+serving:
+  model_name: retailfc_lgbm
+  max_horizon: 28
+  request_timeout_seconds: 5
+  max_concurrency: 32

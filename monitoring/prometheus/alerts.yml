@@ -1,0 +1,76 @@
+# Thresholds are starting points (documented in docs/operations.md), not statistically derived.
+# Drift, data-quality and performance alerts are deliberately separate: drift does not prove accuracy loss.
+groups:
+  - name: retailfc-serving
+    rules:
+      - alert: ApiHighErrorRate
+        expr: sum(rate(retailfc_api_requests_total{endpoint="/forecast",status=~"5.."}[5m])) / clamp_min(sum(rate(retailfc_api_requests_total{endpoint="/forecast"}[5m])), 1e-9) > 0.05
+        for: 5m
+        labels: {severity: page, kind: serving}
+        annotations: {summary: "More than 5% of /forecast requests return 5xx for 5 minutes"}
+      - alert: ApiHighLatencyP95
+        expr: histogram_quantile(0.95, sum(rate(retailfc_api_request_seconds_bucket{endpoint="/forecast"}[5m])) by (le)) > 0.25
+        for: 10m
+        labels: {severity: warn, kind: serving}
+        annotations: {summary: "p95 /forecast latency above 250 ms (stored-forecast retrieval) for 10 minutes"}
+      - alert: ApiDown
+        expr: up{job="retailfc-api"} == 0
+        for: 2m
+        labels: {severity: page, kind: serving}
+        annotations: {summary: "API target is down"}
+  - name: retailfc-data-quality
+    rules:
+      - alert: ExporterCannotReachDatabase
+        expr: retailfc_exporter_db_up == 0
+        for: 2m
+        labels: {severity: page, kind: data_quality}
+        annotations: {summary: "Monitoring exporter cannot query PostgreSQL"}
+      - alert: ActualsMissing
+        expr: retailfc_data_quality_failures{check="missing_actuals_fraction"} > 0.05
+        for: 30m
+        labels: {severity: warn, kind: data_quality}
+        annotations: {summary: "More than 5% of matured forecasts have no actual (retraining is blocked at this level)"}
+      - alert: ActualsConflicting
+        expr: retailfc_data_quality_failures{check="actuals_conflicts"} > 0
+        for: 10m
+        labels: {severity: warn, kind: data_quality}
+        annotations: {summary: "Conflicting actuals detected"}
+      - alert: ActualsStale
+        expr: retailfc_actuals_age_days > 7
+        for: 1h
+        labels: {severity: warn, kind: data_quality}
+        annotations: {summary: "Latest actual is older than 7 days"}
+      - alert: PipelineFailures
+        expr: retailfc_pipeline_failed_runs_24h > 0
+        for: 5m
+        labels: {severity: warn, kind: data_quality}
+        annotations: {summary: "At least one pipeline run failed in the last 24h"}
+  - name: retailfc-performance
+    rules:
+      - alert: ForecastBiasHigh
+        expr: abs(retailfc_forecast_bias_pct) > 0.10
+        for: 1h
+        labels: {severity: warn, kind: performance}
+        annotations: {summary: "|bias| > 10% of demand on matured forecasts (promotion limit)"}
+      - alert: IntervalCoverageLow
+        expr: retailfc_interval_coverage < 0.70
+        for: 1h
+        labels: {severity: warn, kind: performance}
+        annotations: {summary: "Empirical interval coverage below 70% on matured forecasts"}
+      - alert: FallbackShareHigh
+        expr: retailfc_fallback_share > 0.10
+        for: 1h
+        labels: {severity: warn, kind: performance}
+        annotations: {summary: "More than 10% of current-model forecasts use a fallback"}
+  - name: retailfc-drift
+    rules:
+      - alert: DemandDriftHigh
+        expr: retailfc_drift_psi{signal="demand_psi"} > 0.25
+        for: 3h
+        labels: {severity: info, kind: drift}
+        annotations: {summary: "Demand PSI > 0.25 vs training reference. Investigate; this alone does not imply worse accuracy."}
+      - alert: PriceDriftHigh
+        expr: retailfc_drift_psi{signal="price_psi"} > 0.25
+        for: 3h
+        labels: {severity: info, kind: drift}
+        annotations: {summary: "Price-distribution PSI > 0.25 vs training reference. Investigate; not an accuracy alert."}

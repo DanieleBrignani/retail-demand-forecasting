@@ -1,0 +1,12 @@
+retailfc:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_HOST', 'localhost') }}"
+      port: "{{ env_var('DBT_PORT', '5442') | as_number }}"
+      user: "{{ env_var('DBT_USER', 'retailfc') }}"
+      password: "{{ env_var('DBT_PASSWORD', 'retailfc') }}"
+      dbname: "{{ env_var('DBT_DBNAME', 'retailfc') }}"
+      schema: public
+      threads: 4

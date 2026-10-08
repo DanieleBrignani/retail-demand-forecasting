@@ -1,0 +1,17 @@
+# Online Retail II experiment. Same protocol as the packaged experiment.yaml; only the compute budget and the model revision differ.
+# v2 (see docs/experiment_plan.md section 14): train on ALL series (v1 used a seeded 3,000-series subset), level offset in the model,
+# and promotion evidence pooled over 3 consecutive windows (bias is an aggregate-demand property; a single 28-day window moves by +-20%
+# even for the trailing-mean baseline).
+extends: default
+experiment_name: online_retail_case_study
+training:
+  max_series: null
+  train_window_days: 252
+lightgbm:
+  level_offset: true
+  num_boost_round: 300
+  early_stopping_rounds: 30
+  params: {learning_rate: 0.08, num_threads: 8}
+  tuning: {n_trials: 4}
+promotion:
+  evidence_windows: 3

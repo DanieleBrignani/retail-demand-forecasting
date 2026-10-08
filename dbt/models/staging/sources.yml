@@ -1,0 +1,10 @@
+version: 2
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: dataset_versions
+      - name: calendar
+      - name: series
+      - name: sales_long
+      - name: prices

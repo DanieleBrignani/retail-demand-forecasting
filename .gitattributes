@@ -1,0 +1,5 @@
+# Normalise all text files to LF in the repository and in working copies (shell scripts and Dockerfile break with CRLF).
+* text=auto eol=lf
+*.png binary
+*.ipynb text eol=lf
+*.sh text eol=lf

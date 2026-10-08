@@ -1,0 +1,16 @@
+# Fast configuration for fixture-based smoke runs / CI. NOT the benchmark protocol (use the packaged experiment.yaml).
+extends: default
+experiment_name: smoke_fixture
+lightgbm:
+  num_boost_round: 30
+  early_stopping_rounds: 5
+  params: {min_data_in_leaf: 20, num_threads: 2}
+  tuning: {n_trials: 2}
+statistical: {subset_size: 8}
+interpretability: {sample_rows: 4000, permutation_repeats: 1}
+promotion:
+  max_vs_snaive_ratio: 2.0
+  max_abs_bias_pct: 80.0
+  min_interval_coverage: 0.3
+retraining:
+  min_matured_forecast_obs: 500

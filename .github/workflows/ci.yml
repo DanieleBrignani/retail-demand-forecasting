@@ -1,0 +1,63 @@
+name: ci
+# Fixture-based CI only: no real data, no credentials. Real-data benchmark runs are manual (see README, "Real-data run").
+on:
+  push: {branches: [main]}
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13"}
+      - run: pip install ruff
+      - run: ruff check src tests scripts monitoring
+      - run: ruff format --check src tests scripts monitoring
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13", cache: pip}
+      - run: pip install -r requirements.lock && pip install --no-deps -e . pytest
+      - name: Unit tests (no database)
+        run: pytest -m "not integration and not slow" -q
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_USER: retailfc, POSTGRES_PASSWORD: retailfc, POSTGRES_DB: retailfc_test}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U retailfc" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      RETAILFC_TEST_DSN: postgresql://retailfc:retailfc@localhost:5432/retailfc_test
+      MLFLOW_DISABLE_AGENT_HINT: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13", cache: pip}
+      - run: pip install -r requirements.lock && pip install --no-deps -e . pytest
+      - name: dbt in an isolated environment
+        run: |
+          python -m venv .venv-dbt
+          .venv-dbt/bin/pip install "dbt-core>=1.9" "dbt-postgres>=1.9"
+          echo "DBT_BIN=$PWD/.venv-dbt/bin/dbt" >> "$GITHUB_ENV"
+      - name: Integration + end-to-end (real PostgreSQL, MLflow sqlite, dbt build/test incl. negative controls)
+        run: pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp .env.example .env
+      - name: Throwaway CI-only API key (the compose file refuses to start the API without one; this is not a secret)
+        run: echo "RETAILFC_API_KEYS=ci-only-key-0123456789abcdef" >> .env
+      - run: docker compose config --quiet
+      - run: docker build -t retailfc:ci .
+      - name: Smoke - image imports and CLI starts
+        run: docker run --rm retailfc:ci retailfc --help

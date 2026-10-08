@@ -1,0 +1,16 @@
+.venv
+.venv-dbt
+.git
+data
+artifacts
+artifacts_smoke
+reports
+mlruns
+**/__pycache__
+.pytest_cache
+.ruff_cache
+dbt/target
+dbt/target_test
+dbt/logs
+tests
+notebooks

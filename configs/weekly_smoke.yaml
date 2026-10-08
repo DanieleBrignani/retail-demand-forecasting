@@ -1,0 +1,84 @@
+# SMOKE configuration for the synthetic fixture (300 days = 42 blocks): checks mechanics only, no empirical claim.
+# Real-data protocol: configs/weekly_v2.yaml.
+protocol_version: weekly-smoke
+calendar:
+  kind: dataset_blocks
+  drop_incomplete_last_block: true
+horizons:
+- 1
+- 2
+- 3
+- 4
+origins:
+- 34
+- 36
+- 38
+eligibility:
+  rule: product_observed_by_origin
+  min_history_weeks_for_features: 26
+models:
+  baselines:
+  - naive
+  - mean4
+  - mean13
+  - seasonal_naive52
+  - croston_sba
+  - tsb
+  reference_only:
+  - all_zero
+  croston:
+    alpha: 0.1
+  tsb:
+    alpha: 0.1
+    beta: 0.1
+    init_prob_weeks: 13
+  lgbm:
+    tuning_trials: 0
+    num_boost_round: 40
+    early_stopping_rounds: 30
+    quantile_rounds: 20
+    level_offset_eps: 0.1
+    params:
+      objective: tweedie
+      tweedie_variance_power: 1.2
+      learning_rate: 0.05
+      num_leaves: 63
+      min_data_in_leaf: 20
+      feature_fraction: 0.8
+      seed: 0
+      num_threads: 4
+quantiles:
+- 0.1
+- 0.5
+- 0.9
+interval:
+  nominal: 0.8
+  calibration: split_conformal_previous_origin
+segments:
+  window_weeks: 26
+  volume:
+    inactive: no sale in the window
+    terciles: of window units among series with sales
+  intermittency:
+    smooth_min_nonzero_share: 0.75
+    intermittent_min_nonzero_share: 0.25
+  history_weeks:
+  - 13
+  - 52
+selection:
+  primary_metric: pooled_wape_L1
+  min_improvement_over_strongest_baseline_pct: 1.0
+  max_mase_vs_best_baseline_ratio: 1.1
+  max_abs_pooled_bias_pct: 10.0
+  max_abs_origin_bias_pct: 30.0
+  min_origins_within_origin_bias: 0.8
+  max_segment_degradation_pct: 5.0
+  min_segment_demand_share: 0.02
+  max_wape_vs_all_zero: 0.95
+  min_forecast_coverage: 1.0
+  max_train_seconds_per_origin: 600
+  max_batch_seconds: 120
+  intervals_attached_to_serving_only_if:
+    min_empirical_coverage_active: 0.7
+    max_empirical_coverage_active: 0.9
+    max_raw_crossing_rate: 0.02

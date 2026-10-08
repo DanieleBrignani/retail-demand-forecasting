@@ -1,0 +1,168 @@
+# Local stack. Startup order is enforced with health checks (depends_on: condition).
+#   postgres -> migrate (one-shot) -> api / exporter ;  postgres -> mlflow, prefect-server -> prefect-worker
+# Pipeline commands run on demand:  docker compose --profile tools run --rm pipeline retailfc <command>
+name: retailfc
+
+x-app-env: &app-env
+  RETAILFC_DSN: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+  PREFECT_API_URL: http://prefect-server:4200/api
+  RETAILFC_DATA_DIR: /data
+  RETAILFC_ARTIFACTS_DIR: /artifacts
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      GRAFANA_RO_PASSWORD: ${GRAFANA_RO_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    ports: ["127.0.0.1:${POSTGRES_PORT:-5452}:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build: .
+    image: retailfc:dev
+    command: ["retailfc", "db", "migrate"]
+    environment: *app-env
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+
+  mlflow:
+    build: .
+    image: retailfc:dev
+    command: >
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/mlflow
+      --artifacts-destination /mlartifacts --serve-artifacts
+    volumes: ["mlartifacts:/mlartifacts"]
+    user: "0"
+    ports: ["127.0.0.1:${MLFLOW_PORT:-5050}:5000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:5000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  prefect-server:
+    build: .
+    image: retailfc:dev
+    command: ["prefect", "server", "start", "--host", "0.0.0.0", "--port", "4200"]
+    environment:
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/prefect
+      PREFECT_SERVER_ANALYTICS_ENABLED: "false"
+      PREFECT_SERVER_DATABASE_CONNECTION_TIMEOUT: "60"
+    restart: on-failure
+    ports: ["127.0.0.1:${PREFECT_PORT:-4210}:4200"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:4200/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  prefect-worker:
+    build: .
+    image: retailfc:dev
+    command: ["python", "-m", "retailfc.orchestration.serve"]
+    environment: *app-env
+    volumes: ["${RETAILFC_DATA_HOST:-./data}:/data", "artifacts:/artifacts"]
+    depends_on:
+      prefect-server: {condition: service_healthy}
+      mlflow: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+
+  api:
+    build: .
+    image: retailfc:dev
+    command: ["retailfc", "api", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      <<: *app-env
+      RETAILFC_CONFIG: /app/configs/serving_weekly.yaml
+      # required, no default: the API refuses /forecast (503 auth_not_configured) without keys; comma-separate two keys to rotate
+      RETAILFC_API_KEYS: ${RETAILFC_API_KEYS:?set RETAILFC_API_KEYS in .env (python -c "import secrets; print(secrets.token_urlsafe(32))")}
+    ports: ["127.0.0.1:${API_PORT:-8010}:8000"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health/live', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  exporter:
+    build: .
+    image: retailfc:dev
+    command: ["retailfc", "monitor", "serve", "--port", "9108", "--interval", "30"]
+    environment: *app-env
+    ports: ["127.0.0.1:${EXPORTER_PORT:-9118}:9108"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:9108/metrics', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  pipeline:
+    build: .
+    image: retailfc:dev
+    profiles: ["tools"]
+    environment: *app-env
+    volumes: ["${RETAILFC_DATA_HOST:-./data}:/data", "artifacts:/artifacts"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      mlflow: {condition: service_healthy}
+    entrypoint: [""]
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - promdata:/prometheus
+    ports: ["127.0.0.1:${PROMETHEUS_PORT:-9095}:9090"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GRAFANA_RO_PASSWORD: ${GRAFANA_RO_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports: ["127.0.0.1:${GRAFANA_PORT:-3005}:3000"]
+    depends_on:
+      prometheus: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  pgdata:
+  mlartifacts:
+  artifacts:
+  promdata:
+  grafanadata:

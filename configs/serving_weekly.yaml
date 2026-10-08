@@ -1,0 +1,5 @@
+# Serving configuration for the weekly line: the API serves the approved model of the registry name below.
+# (The daily line keeps serving.model_name; its approval was revoked, see docs/audit_price_leakage.md.)
+extends: default
+serving:
+  api_model_name: retailfc_weekly

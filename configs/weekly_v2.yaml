@@ -1,0 +1,53 @@
+# Weekly protocol v2 -- FROZEN before the v2 run (docs/weekly_protocol_v2.md). Do not edit after results exist: copy to a new version instead.
+protocol_version: weekly-v2
+calendar:
+  kind: dataset_blocks            # 7-day blocks starting on the first observed day (Tue 2009-12-01); NOT ISO weeks. Same blocks as price blocks.
+  drop_incomplete_last_block: true
+horizons: [1, 2, 3, 4]            # weeks
+origins: [65, 69, 73, 77, 81, 85, 89, 93, 97, 101]   # last observed block; 4 blocks apart => targets do not overlap
+eligibility:
+  rule: product_observed_by_origin   # >= 1 recorded sale (any channel) in blocks <= origin; later products = cold start, reported separately
+  min_history_weeks_for_features: 26
+models:
+  baselines: [naive, mean4, mean13, seasonal_naive52, croston_sba, tsb]
+  reference_only: [all_zero]       # never selectable: not an inventory policy
+  croston: {alpha: 0.1}
+  tsb: {alpha: 0.1, beta: 0.1, init_prob_weeks: 13}
+  lgbm:
+    tuning_trials: 0               # fixed recipe, no search; early stopping on the last 4 target blocks is the only adaptive element
+    num_boost_round: 400
+    early_stopping_rounds: 30
+    quantile_rounds: 200
+    level_offset_eps: 0.1
+    params:
+      objective: tweedie
+      tweedie_variance_power: 1.2
+      learning_rate: 0.05
+      num_leaves: 63
+      min_data_in_leaf: 100
+      feature_fraction: 0.8
+      seed: 0
+      num_threads: 8
+quantiles: [0.1, 0.5, 0.9]
+interval:
+  nominal: 0.8
+  calibration: split_conformal_previous_origin   # corrections from the PRECEDING origin's realised errors only; first origin uncalibrated
+segments:                          # derived at each origin from data <= origin on eligible series only
+  window_weeks: 26
+  volume: {inactive: "no sale in the window", terciles: "of window units among series with sales"}
+  intermittency: {smooth_min_nonzero_share: 0.75, intermittent_min_nonzero_share: 0.25}
+  history_weeks: [13, 52]          # <13, 13-51, >=52 weeks since first sale
+selection:                         # applied mechanically by weekly.select_model; thresholds not to be changed after seeing results
+  primary_metric: pooled_wape_L1
+  min_improvement_over_strongest_baseline_pct: 1.0   # ML candidates only; same value as the daily promotion rule
+  max_mase_vs_best_baseline_ratio: 1.10               # series-level guard (NEW for v2): scaled error must not be >10% worse
+  max_abs_pooled_bias_pct: 10.0
+  max_abs_origin_bias_pct: 30.0                       # (NEW for v2)
+  min_origins_within_origin_bias: 0.8                 # pooled bias must not hide large opposing errors across origins
+  max_segment_degradation_pct: 5.0                    # vs strongest baseline, segments carrying >= 2% of actual demand
+  min_segment_demand_share: 0.02
+  max_wape_vs_all_zero: 0.95                          # sanity: must beat the all-zero reference by >= 5%
+  min_forecast_coverage: 1.0                          # every eligible series receives a forecast
+  max_train_seconds_per_origin: 600
+  max_batch_seconds: 120
+  intervals_attached_to_serving_only_if: {min_empirical_coverage_active: 0.7, max_empirical_coverage_active: 0.9, max_raw_crossing_rate: 0.02}
