@@ -21,7 +21,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.13", cache: pip}
-      - run: pip install -r requirements.lock && pip install --no-deps -e . pytest
+      # pytest is installed WITH its own dependencies (a '--no-deps' install left out iniconfig and broke collection)
+      - run: pip install -r requirements.lock && pip install --no-deps -e . && pip install pytest
       - name: Unit tests (no database)
         run: pytest -m "not integration and not slow" -q
 
@@ -41,7 +42,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.13", cache: pip}
-      - run: pip install -r requirements.lock && pip install --no-deps -e . pytest
+      # pytest is installed WITH its own dependencies (a '--no-deps' install left out iniconfig and broke collection)
+      - run: pip install -r requirements.lock && pip install --no-deps -e . && pip install pytest
       - name: dbt in an isolated environment
         run: |
           python -m venv .venv-dbt
